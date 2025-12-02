@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录注册</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .form-toggle { display: none; }
+    .form-toggle.active { display: block; }
+    .tab-active { color: #165DFF; border-b: 2px solid #165DFF; }
+    /* 全屏背景图 */
+    body {
+      background-image: url('loginWidget.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+    /* 表单容器样式 */
+    .bg-container {
+      position: relative;
+      width: 100%;
+      max-width: 450px;
+      border-radius: 1.25rem;
+      background-color: rgba(255, 255, 255, 0.95); /* 半透明白色背景，确保表单可读性 */
+      -webkit-backdrop-filter: blur(10px); /* 毛玻璃效果 - Safari 支持 */
+      backdrop-filter: blur(10px); /* 毛玻璃效果 */
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+  <!-- 表单容器 -->
+  <div class="bg-container shadow-xl p-6">
+      <!-- 标签切换 -->
+      <div class="flex justify-center mb-6">
+        <button id="loginTab" class="px-6 py-2 font-semibold text-lg tab-active">登录</button>
+        <button id="registerTab" class="px-6 py-2 font-semibold text-lg text-gray-500">注册</button>
+      </div>
+
+      <!-- 登录表单 -->
+      <form id="loginForm" class="form-toggle active space-y-4">
+        <div class="relative">
+          <i class="fa-solid fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input type="email" placeholder="邮箱" class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white/80">
+        </div>
+        <div class="relative">
+          <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input type="password" placeholder="密码" class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white/80">
+        </div>
+        <div class="flex items-center justify-between text-sm">
+          <label class="flex items-center"><input type="checkbox" class="mr-2">记住我</label>
+          <a href="#" class="text-blue-500">忘记密码?</a>
+        </div>
+        <button type="button" class="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition">登录</button>
+      </form>
+
+      <!-- 注册表单 -->
+      <form id="registerForm" class="form-toggle space-y-4">
+        <div class="relative">
+          <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input type="text" placeholder="用户名" class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white/80">
+        </div>
+        <div class="relative">
+          <i class="fa-solid fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input type="email" placeholder="邮箱" class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white/80">
+        </div>
+        <div class="relative">
+          <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input type="password" placeholder="密码" class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white/80">
+        </div>
+        <button type="button" class="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition">注册</button>
+      </form>
+
+      <!-- 切换提示 -->
+      <div class="mt-4 text-center text-sm">
+        <span id="loginTip" class="text-gray-500">没有账号? <button id="toRegister" class="text-blue-500">注册</button></span>
+        <span id="registerTip" class="text-gray-500 hidden">已有账号? <button id="toLogin" class="text-blue-500">登录</button></span>
+      </div>
+  </div>
+
+  <script>
+    const [loginTab, registerTab] = [document.getElementById('loginTab'), document.getElementById('registerTab')];
+    const [loginForm, registerForm] = [document.getElementById('loginForm'), document.getElementById('registerForm')];
+    const [loginTip, registerTip] = [document.getElementById('loginTip'), document.getElementById('registerTip')];
+    
+    function showLogin() {
+      loginTab.classList.add('tab-active');
+      registerTab.classList.remove('tab-active');
+      loginForm.classList.add('active');
+      registerForm.classList.remove('active');
+      loginTip.classList.remove('hidden');
+      registerTip.classList.add('hidden');
+    }
+    
+    function showRegister() {
+      registerTab.classList.add('tab-active');
+      loginTab.classList.remove('tab-active');
+      registerForm.classList.add('active');
+      loginForm.classList.remove('active');
+      registerTip.classList.remove('hidden');
+      loginTip.classList.add('hidden');
+    }
+    
+    loginTab.addEventListener('click', showLogin);
+    registerTab.addEventListener('click', showRegister);
+    document.getElementById('toRegister').addEventListener('click', showRegister);
+    document.getElementById('toLogin').addEventListener('click', showLogin);
+  </script>
+</body>
+</html>
