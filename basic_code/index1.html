@@ -9,7 +9,7 @@
   <style>
     .form-toggle { display: none; }
     .form-toggle.active { display: block; }
-    .tab-active { color: #165DFF; border-b: 2px solid #165DFF; }
+    .tab-active { color: #165DFF; border-bottom: 2px solid #165DFF; }
     /* 全屏背景图 */
     body {
       background-image: url('loginWidget.jpg');
@@ -87,7 +87,9 @@
     
     function showLogin() {
       loginTab.classList.add('tab-active');
+      loginTab.classList.remove('text-gray-500');
       registerTab.classList.remove('tab-active');
+      registerTab.classList.add('text-gray-500');
       loginForm.classList.add('active');
       registerForm.classList.remove('active');
       loginTip.classList.remove('hidden');
@@ -96,7 +98,9 @@
     
     function showRegister() {
       registerTab.classList.add('tab-active');
+      registerTab.classList.remove('text-gray-500');
       loginTab.classList.remove('tab-active');
+      loginTab.classList.add('text-gray-500');
       registerForm.classList.add('active');
       loginForm.classList.remove('active');
       registerTip.classList.remove('hidden');
