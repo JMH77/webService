@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Word转PDF转换器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .file-item {
+      transition: all 0.3s;
+    }
+    .file-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .progress-bar {
+      transition: width 0.3s ease;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-4">
+  <div class="max-w-4xl mx-auto">
+    <!-- 标题 -->
+    <div class="text-center mb-8">
+      <h1 class="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-2">
+        <i class="fas fa-file-word mr-3"></i>Word转PDF转换器
+      </h1>
+      <p class="text-gray-600">仅支持 .docx 格式</p>
+      <p class="text-sm text-gray-500 mt-2">
+        <i class="fas fa-info-circle mr-1"></i>
+        支持大文件转换，超大文件（>20MB）将采用分页处理策略
+      </p>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <!-- 文件选择区域 -->
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700 mb-3">
+          <i class="fas fa-folder-open mr-2 text-purple-600"></i>选择Word文档
+        </label>
+        <div class="border-2 border-dashed border-purple-300 rounded-lg p-8 text-center hover:border-purple-500 transition cursor-pointer bg-purple-50" 
+             onclick="document.getElementById('fileInput').click()">
+          <i class="fas fa-cloud-upload-alt text-4xl text-purple-600 mb-4"></i>
+          <p class="text-gray-700 font-medium mb-2">点击或拖拽文件到此处</p>
+          <p class="text-sm text-gray-500">支持 .docx 格式，可同时选择多个文件</p>
+          <input type="file" id="fileInput" multiple accept=".docx" class="hidden" aria-label="选择Word文档文件" title="选择Word文档文件">
+        </div>
+      </div>
+
+      <!-- 文件列表区域 -->
+      <div id="fileListArea" class="mb-6">
+        <p class="text-gray-400 text-center py-8">选择的文件将显示在这里</p>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="flex gap-4 mb-6">
+        <button onclick="convertAllToPDF()" id="convertBtn" 
+                class="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-semibold hover:opacity-90 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" 
+                disabled>
+          <i class="fas fa-file-pdf mr-2"></i>全部转换为PDF
+        </button>
+        <button onclick="clearFiles()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition">
+          <i class="fas fa-trash mr-2"></i>清空列表
+        </button>
+      </div>
+
+      <!-- 进度提示 -->
+      <div id="progressArea" class="hidden">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-medium text-blue-700" id="progressText">正在转换...</span>
+            <span class="text-sm text-blue-600" id="progressPercent">0%</span>
+          </div>
+          <div class="w-full bg-blue-200 rounded-full h-2">
+            <div class="bg-blue-600 h-2 rounded-full progress-bar" id="progressBar" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedFiles = [];
+    let isConverting = false;
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    const LARGE_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const VERY_LARGE_FILE_SIZE = 20 * 1024 * 1024; // 20MB - 需要使用分页策略
+
+    // 格式化文件大小
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+      return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    // 检查文件大小
+    function checkFileSize(file) {
+      if (file.size > MAX_FILE_SIZE) {
+        return {
+          valid: false,
+          message: `文件 "${file.name}" 过大（${formatFileSize(file.size)}），超过限制（${formatFileSize(MAX_FILE_SIZE)}）。请选择较小的文件。`
+        };
+      }
+      if (file.size > VERY_LARGE_FILE_SIZE) {
+        return {
+          valid: true,
+          warning: true,
+          message: `文件 "${file.name}" 为超大文件（${formatFileSize(file.size)}），将采用分页处理策略，转换可能需要较长时间，请耐心等待。`
+        };
+      }
+      if (file.size > LARGE_FILE_SIZE) {
+        return {
+          valid: true,
+          warning: true,
+          message: `文件 "${file.name}" 较大（${formatFileSize(file.size)}），转换可能需要较长时间，请耐心等待。`
+        };
+      }
+      return { valid: true, warning: false };
+    }
+
+    // 文件选择事件
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      handleFiles(Array.from(e.target.files));
+    });
+
+    // 拖拽上传
+    const dropZone = document.querySelector('.border-dashed');
+    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropZone.addEventListener(eventName, () => {
+        dropZone.classList.add('border-purple-500', 'bg-purple-100');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropZone.addEventListener(eventName, () => {
+        dropZone.classList.remove('border-purple-500', 'bg-purple-100');
+      }, false);
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      const files = Array.from(e.dataTransfer.files).filter(file => 
+        file.name.endsWith('.docx')
+      );
+      handleFiles(files);
+    }, false);
+
+    function handleFiles(files) {
+      const validFiles = files.filter(file => 
+        file.name.endsWith('.docx')
+      );
+
+      if (validFiles.length === 0) {
+        alert('请选择 .docx 格式的文件');
+        return;
+      }
+
+      const warnings = [];
+      
+      // 添加新文件到列表（避免重复）并检查大小
+      validFiles.forEach(file => {
+        const sizeCheck = checkFileSize(file);
+        
+        if (!sizeCheck.valid) {
+          alert(sizeCheck.message);
+          return;
+        }
+        
+        if (sizeCheck.warning) {
+          warnings.push(sizeCheck.message);
+        }
+        
+        if (!selectedFiles.find(f => f.name === file.name && f.size === file.size)) {
+          selectedFiles.push(file);
+        }
+      });
+
+      updateFileList();
+      
+      // 显示警告
+      if (warnings.length > 0) {
+        setTimeout(() => {
+          alert(warnings.join('\n\n'));
+        }, 100);
+      }
+    }
+
+    function updateFileList() {
+      const listArea = document.getElementById('fileListArea');
+      const convertBtn = document.getElementById('convertBtn');
+      
+      if (selectedFiles.length === 0) {
+        listArea.innerHTML = '<p class="text-gray-400 text-center py-8">选择的文件将显示在这里</p>';
+        convertBtn.disabled = true;
+        return;
+      }
+
+      convertBtn.disabled = false;
+      listArea.innerHTML = '<div class="space-y-3"></div>';
+      const container = listArea.querySelector('div');
+
+      selectedFiles.forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between';
+        
+        const fileSize = formatFileSize(file.size);
+        const isVeryLarge = file.size > VERY_LARGE_FILE_SIZE;
+        const isLarge = file.size > LARGE_FILE_SIZE;
+        const sizeClass = isVeryLarge ? 'text-red-600 font-bold' : (isLarge ? 'text-orange-600 font-semibold' : 'text-gray-500');
+        const sizeIcon = isVeryLarge ? '<i class="fas fa-exclamation-circle text-red-500 mr-1"></i>' : (isLarge ? '<i class="fas fa-exclamation-triangle text-orange-500 mr-1"></i>' : '');
+        
+        fileItem.innerHTML = `
+          <div class="flex items-center flex-1">
+            <i class="fas fa-file-word text-blue-600 mr-3 text-2xl"></i>
+            <div class="flex-1">
+              <div class="font-medium text-gray-800">${file.name}</div>
+              <div class="text-sm ${sizeClass}">${sizeIcon}${fileSize}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="status-${index}" class="text-sm text-gray-500"></span>
+            <button onclick="removeFile(${index})" class="text-red-500 hover:text-red-700 transition">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        `;
+        
+        container.appendChild(fileItem);
+      });
+    }
+
+    function removeFile(index) {
+      selectedFiles.splice(index, 1);
+      updateFileList();
+    }
+
+    function clearFiles() {
+      selectedFiles = [];
+      updateFileList();
+      hideProgress();
+    }
+
+    async function convertAllToPDF() {
+      if (selectedFiles.length === 0 || isConverting) return;
+
+      isConverting = true;
+      showProgress(0, selectedFiles.length, 0, '');
+      
+      try {
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          const statusEl = document.getElementById(`status-${i}`);
+          
+          if (statusEl) {
+            statusEl.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500"></i> 准备中...';
+          }
+
+          const fileProgress = ((i + 1) / selectedFiles.length * 100).toFixed(0);
+          updateProgress(i + 1, selectedFiles.length, fileProgress, `正在处理: ${file.name}`);
+
+          try {
+            await convertDocxToPDF(file, (stage, progress) => {
+              if (statusEl) {
+                const stageText = {
+                  'reading': '读取文件...',
+                  'converting': '转换为HTML...',
+                  'rendering': '渲染页面...',
+                  'generating': '生成PDF...',
+                  'completed': '完成'
+                };
+                statusEl.innerHTML = `<i class="fas fa-spinner fa-spin text-blue-500"></i> ${stageText[stage] || '处理中...'}`;
+              }
+              
+              // 计算总体进度：当前文件进度 * (1/总数) + 已完成文件数/总数
+              const currentFileProgress = progress || 0;
+              const totalProgress = ((i / selectedFiles.length) + (currentFileProgress / 100 / selectedFiles.length)) * 100;
+              updateProgress(i + 1, selectedFiles.length, totalProgress.toFixed(0), `正在处理: ${file.name}`);
+            });
+
+            if (statusEl) {
+              statusEl.innerHTML = '<i class="fas fa-check-circle text-green-500"></i> 完成';
+            }
+            
+            // 清理内存
+            if (window.gc) {
+              window.gc();
+            }
+          } catch (error) {
+            console.error('转换失败:', file.name, error);
+            if (statusEl) {
+              statusEl.innerHTML = '<i class="fas fa-exclamation-circle text-red-500"></i> 失败';
+            }
+            const errorMsg = error.message || '未知错误';
+            alert(`文件 "${file.name}" 转换失败: ${errorMsg}`);
+          }
+        }
+
+        alert(`转换完成！共处理 ${selectedFiles.length} 个文件。`);
+      } catch (error) {
+        console.error('转换过程出错:', error);
+        alert('转换过程中出现错误: ' + error.message);
+      } finally {
+        isConverting = false;
+        hideProgress();
+      }
+    }
+
+    async function convertDocxToPDF(file, progressCallback) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = async function(e) {
+          let tempDiv = null;
+          let canvas = null;
+          
+          try {
+            if (progressCallback) progressCallback('reading', 5);
+            
+            const arrayBuffer = e.target.result;
+            
+            if (progressCallback) progressCallback('converting', 20);
+            
+            // 使用 mammoth 将 docx 转换为 HTML
+            const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+            const htmlContent = result.value;
+            const messages = result.messages;
+
+            // 如果有警告，可以在这里处理
+            if (messages.length > 0) {
+              console.warn('转换警告:', messages);
+            }
+
+            // 根据文件大小选择渲染参数
+            const isVeryLargeFile = file.size > VERY_LARGE_FILE_SIZE;
+            const isLargeFile = file.size > LARGE_FILE_SIZE;
+            
+            // 超大文件使用更激进的优化
+            let scale, imgQuality, maxCanvasHeight;
+            if (isVeryLargeFile) {
+              scale = 1.0; // 最低分辨率
+              imgQuality = 0.7; // 更低的质量
+              maxCanvasHeight = 5000; // 限制canvas最大高度
+            } else if (isLargeFile) {
+              scale = 1.2;
+              imgQuality = 0.8;
+              maxCanvasHeight = 6000;
+            } else {
+              scale = 2.0;
+              imgQuality = 0.92;
+              maxCanvasHeight = undefined;
+            }
+            
+            if (progressCallback) progressCallback('rendering', 40);
+
+            // 创建临时容器显示HTML内容
+            tempDiv = document.createElement('div');
+            tempDiv.style.width = '210mm'; // A4宽度
+            tempDiv.style.padding = '20mm';
+            tempDiv.style.backgroundColor = 'white';
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.left = '-9999px';
+            tempDiv.style.top = '0';
+            tempDiv.style.overflow = 'hidden';
+            tempDiv.innerHTML = htmlContent;
+            document.body.appendChild(tempDiv);
+
+            // 等待DOM渲染完成，超大文件需要更长时间
+            await new Promise(resolve => setTimeout(resolve, isVeryLargeFile ? 300 : 100));
+
+            // 检查内容高度，超大文件直接使用分页策略
+            const contentHeight = tempDiv.scrollHeight;
+            const A4_HEIGHT_PX = (297 - 40) * 3.779527559; // A4高度减去padding，转换为px（96 DPI）
+            // 20MB+文件直接使用分页策略，或者内容高度超过3页也使用分页
+            const needsPagination = isVeryLargeFile || contentHeight > A4_HEIGHT_PX * 3;
+
+            if (needsPagination) {
+              // 使用分页策略处理超大文件
+              await convertWithPagination(tempDiv, htmlContent, file, scale, imgQuality, progressCallback);
+              
+              // 清理DOM
+              if (tempDiv && tempDiv.parentNode) {
+                document.body.removeChild(tempDiv);
+                tempDiv = null;
+              }
+              
+              resolve();
+              return;
+            }
+
+            // 使用 html2canvas 转换为图片（优化大文件）
+            const canvasOptions = {
+              scale: scale,
+              useCORS: true,
+              logging: false,
+              removeContainer: true,
+              allowTaint: true,
+              backgroundColor: '#ffffff',
+              imageTimeout: isVeryLargeFile ? 30000 : 15000,
+              windowWidth: 794, // A4宽度像素 (210mm at 96 DPI)
+            };
+
+            // 限制canvas尺寸
+            if (maxCanvasHeight) {
+              canvasOptions.height = Math.min(tempDiv.scrollHeight * scale, maxCanvasHeight);
+            }
+
+            canvas = await html2canvas(tempDiv, canvasOptions);
+
+            // 如果canvas仍然太大，进行二次压缩
+            if (canvas.width * canvas.height > 8000000) { // 超过约8MP
+              console.warn('Canvas尺寸过大，进行二次压缩');
+              const targetWidth = Math.sqrt(8000000 * canvas.width / canvas.height);
+              const targetHeight = (targetWidth * canvas.height) / canvas.width;
+              
+              const compressedCanvas = document.createElement('canvas');
+              compressedCanvas.width = targetWidth;
+              compressedCanvas.height = targetHeight;
+              const ctx = compressedCanvas.getContext('2d');
+              ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
+              
+              // 清理原始canvas
+              canvas.width = 0;
+              canvas.height = 0;
+              canvas = compressedCanvas;
+              imgQuality = Math.max(0.65, imgQuality - 0.1); // 进一步降低质量
+            }
+
+            // 立即清理DOM
+            if (tempDiv && tempDiv.parentNode) {
+              document.body.removeChild(tempDiv);
+              tempDiv = null;
+            }
+
+            if (progressCallback) progressCallback('generating', 70);
+
+            // 创建PDF
+            const { jsPDF } = window.jspdf;
+            
+            // 对于超大文件，分批生成图片数据以避免内存溢出
+            let imgData;
+            try {
+              imgData = canvas.toDataURL('image/jpeg', imgQuality);
+            } catch (error) {
+              // 如果仍然失败，进一步降低质量
+              console.warn('生成图片数据失败，尝试更低质量');
+              imgData = canvas.toDataURL('image/jpeg', Math.max(0.5, imgQuality - 0.15));
+            }
+            
+            const pdf = new jsPDF({
+              orientation: 'portrait',
+              unit: 'mm',
+              format: 'a4',
+              compress: true
+            });
+
+            const imgWidth = 210; // A4宽度（毫米）
+            const pageHeight = 297; // A4高度（毫米）
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
+            let pageNum = 0;
+
+            // 添加第一页
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+            pageNum++;
+            heightLeft -= pageHeight;
+
+            // 如果内容超过一页，添加新页面
+            while (heightLeft > 0) {
+              position = heightLeft - imgHeight;
+              pdf.addPage();
+              pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+              pageNum++;
+              heightLeft -= pageHeight;
+              
+              // 更新进度
+              if (progressCallback && pageNum % 3 === 0) {
+                const progress = 70 + Math.min((pageNum / 50) * 25, 25);
+                progressCallback('generating', progress);
+              }
+            }
+
+            // 清理canvas和图片数据
+            imgData = null;
+            if (canvas) {
+              canvas.width = 0;
+              canvas.height = 0;
+              canvas = null;
+            }
+
+            // 强制垃圾回收提示
+            if (isVeryLargeFile && window.gc) {
+              window.gc();
+            }
+
+            if (progressCallback) progressCallback('completed', 100);
+
+            // 下载PDF
+            const fileName = file.name.replace(/\.docx$/i, '.pdf');
+            pdf.save(fileName);
+
+            resolve();
+          } catch (error) {
+            // 确保清理资源
+            if (tempDiv && tempDiv.parentNode) {
+              try {
+                document.body.removeChild(tempDiv);
+              } catch (e) {}
+            }
+            if (canvas) {
+              try {
+                canvas.width = 0;
+                canvas.height = 0;
+              } catch (e) {}
+            }
+            
+            // 提供更详细的错误信息
+            let errorMessage = '转换失败';
+            if (error.message) {
+              errorMessage = error.message;
+            } else if (error.toString) {
+              errorMessage = error.toString();
+            }
+            
+            // 针对常见错误提供友好提示
+            if (errorMessage.includes('memory') || errorMessage.includes('Memory') || 
+                errorMessage.includes('allocation') || errorMessage.includes('Allocation')) {
+              errorMessage = `内存不足。文件大小：${formatFileSize(file.size)}。建议：\n1. 关闭其他占用内存的程序\n2. 将文件拆分成多个较小的文件\n3. 使用专业PDF转换软件`;
+            } else if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+              errorMessage = `转换超时。文件可能过大或内容过于复杂。文件大小：${formatFileSize(file.size)}。请尝试较小的文件。`;
+            } else if (errorMessage.includes('canvas') || errorMessage.includes('Canvas')) {
+              errorMessage = `渲染失败，可能是内容过于复杂。文件大小：${formatFileSize(file.size)}。建议简化文档内容后重试。`;
+            }
+            
+            reject(new Error(errorMessage));
+          }
+        };
+
+        reader.onerror = function() {
+          reject(new Error('文件读取失败，请检查文件是否损坏'));
+        };
+
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    // 分页转换函数（用于超大文件）
+    async function convertWithPagination(originalDiv, htmlContent, file, scale, imgQuality, progressCallback) {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+
+      // A4尺寸（毫米）
+      const pageWidthMm = 210;
+      const pageHeightMm = 297;
+      const paddingMm = 20;
+      const contentWidthMm = pageWidthMm - paddingMm * 2;
+      const contentHeightMm = pageHeightMm - paddingMm * 2;
+      
+      // 转换为像素（96 DPI）
+      const mmToPx = 3.779527559;
+      const contentHeightPx = contentHeightMm * mmToPx;
+      
+      let currentTop = 0;
+      const totalHeight = originalDiv.scrollHeight;
+      let pageIndex = 0;
+
+      if (progressCallback) progressCallback('rendering', 45);
+
+      while (currentTop < totalHeight) {
+        // 创建单页容器
+        const pageDiv = document.createElement('div');
+        pageDiv.style.width = `${pageWidthMm}mm`;
+        pageDiv.style.padding = `${paddingMm}mm`;
+        pageDiv.style.backgroundColor = 'white';
+        pageDiv.style.position = 'absolute';
+        pageDiv.style.left = '-9999px';
+        pageDiv.style.top = '0';
+        pageDiv.style.overflow = 'hidden';
+        pageDiv.style.height = `${contentHeightMm}mm`;
+        pageDiv.style.boxSizing = 'border-box';
+        
+        // 创建内容包装器，显示当前页区域的内容
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.marginTop = `-${currentTop}px`;
+        wrapper.style.width = `${contentWidthMm}mm`;
+        wrapper.innerHTML = htmlContent;
+        pageDiv.appendChild(wrapper);
+        document.body.appendChild(pageDiv);
+
+        // 等待DOM渲染完成
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        try {
+          // 渲染当前页
+          const pageCanvas = await html2canvas(pageDiv, {
+            scale: scale,
+            useCORS: true,
+            logging: false,
+            removeContainer: false,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            imageTimeout: 30000,
+            windowWidth: pageWidthMm * mmToPx,
+            height: contentHeightMm * mmToPx * scale
+          });
+
+          // 转换为图片
+          const pageImgData = pageCanvas.toDataURL('image/jpeg', imgQuality);
+          const imgHeightMm = (pageCanvas.height * contentWidthMm) / pageCanvas.width;
+
+          // 添加到PDF
+          if (pageIndex > 0) {
+            pdf.addPage();
+          }
+          pdf.addImage(pageImgData, 'JPEG', paddingMm, paddingMm, contentWidthMm, imgHeightMm, undefined, 'FAST');
+
+          // 清理canvas和图片数据
+          pageCanvas.width = 0;
+          pageCanvas.height = 0;
+          pageImgData = null;
+        } catch (error) {
+          console.error(`第${pageIndex + 1}页渲染失败:`, error);
+          // 即使某页失败也继续处理下一页
+        }
+
+        // 清理DOM
+        if (pageDiv && pageDiv.parentNode) {
+          document.body.removeChild(pageDiv);
+        }
+
+        currentTop += contentHeightPx;
+        pageIndex++;
+
+        // 更新进度
+        if (progressCallback) {
+          const progress = 45 + Math.min((currentTop / totalHeight) * 50, 50);
+          progressCallback('generating', progress);
+        }
+
+        // 每处理几页就休息一下，避免阻塞UI和内存积累
+        if (pageIndex % 3 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // 强制垃圾回收提示
+          if (window.gc) {
+            window.gc();
+          }
+        }
+
+        // 安全限制，避免无限循环
+        if (pageIndex > 500) {
+          console.warn('页数过多，已限制处理');
+          break;
+        }
+      }
+
+      if (progressCallback) progressCallback('completed', 100);
+
+      // 下载PDF
+      const fileName = file.name.replace(/\.docx$/i, '.pdf');
+      pdf.save(fileName);
+    }
+
+    function showProgress(current, total, percent, fileName) {
+      document.getElementById('progressArea').classList.remove('hidden');
+      updateProgress(current, total, percent, fileName);
+    }
+
+    function updateProgress(current, total, percent, fileName) {
+      const progressText = fileName 
+        ? `${fileName} (${current}/${total})`
+        : `正在转换: ${current}/${total}`;
+      document.getElementById('progressText').textContent = progressText;
+      document.getElementById('progressPercent').textContent = `${percent}%`;
+      document.getElementById('progressBar').style.width = `${percent}%`;
+    }
+
+    function hideProgress() {
+      document.getElementById('progressArea').classList.add('hidden');
+      document.getElementById('progressBar').style.width = '0%';
+    }
+  </script>
+</body>
+</html>
